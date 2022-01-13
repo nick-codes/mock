@@ -402,9 +402,18 @@ func (g *generator) GenerateMockInterface(intf *model.Interface, outputPackagePa
 	g.p("}")
 	g.p("")
 
+	g.p("")
+	g.p("// I%v is the interface for a %v", mockType, mockType)
+	g.p("type I%v interface {", mockType)
+	g.in()
+	g.p("EXPECT() I%vMockRecorder", mockType)
+	g.out()
+	g.p("}")
+	g.p("")
+
 	// XXX: possible name collision here if someone has EXPECT in their interface.
-	g.p("// EXPECT returns an object that allows the caller to indicate expected use.")
-	g.p("func (m *%v) EXPECT() *%vMockRecorder {", mockType, mockType)
+	g.p("// EXPECT returns an interface that allows the caller to indicate expected use.")
+	g.p("func (m *%v) EXPECT() I%vMockRecorder {", mockType, mockType)
 	g.in()
 	g.p("return m.recorder")
 	g.out()
@@ -423,6 +432,16 @@ func (b byMethodName) Less(i, j int) bool { return b[i].Name < b[j].Name }
 
 func (g *generator) GenerateMockMethods(mockType string, intf *model.Interface, pkgOverride string) {
 	sort.Sort(byMethodName(intf.Methods))
+	g.p("")
+	g.p("// I%vMockRecorder is the interface for a %vMockRecord interface.", mockType, mockType)
+	g.p("type I%vMockRecorder interface {", mockType)
+	g.in()
+	for _, m := range intf.Methods {
+		g.GenerateMockRecorderInterfaceMethod(mockType, m)
+	}
+	g.out()
+	g.p("}")
+	g.p("")
 	for _, m := range intf.Methods {
 		g.p("")
 		_ = g.GenerateMockMethod(mockType, m, pkgOverride)
@@ -509,6 +528,29 @@ func (g *generator) GenerateMockMethod(mockType string, m *model.Method, pkgOver
 	g.out()
 	g.p("}")
 	return nil
+}
+
+func (g *generator) GenerateMockRecorderInterfaceMethod(mockType string, m *model.Method) {
+	argNames := g.getArgNames(m)
+
+	var argString string
+	if m.Variadic == nil {
+		argString = strings.Join(argNames, ", ")
+	} else {
+		argString = strings.Join(argNames[:len(argNames)-1], ", ")
+	}
+	if argString != "" {
+		argString += " interface{}"
+	}
+
+	if m.Variadic != nil {
+		if argString != "" {
+			argString += ", "
+		}
+		argString += fmt.Sprintf("%s ...interface{}", argNames[len(argNames)-1])
+	}
+
+	g.p("%v(%v) *gomock.Call", m.Name, argString)
 }
 
 func (g *generator) GenerateMockRecorderMethod(mockType string, m *model.Method) error {
